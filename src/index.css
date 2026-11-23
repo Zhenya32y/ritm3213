@@ -1,0 +1,48 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Manrope", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+@layer base {
+  html {
+    font-family: var(--font-sans);
+    color: #1c1b18;
+    background-color: #faf9f6;
+  }
+
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* Subtle custom scrollbar for the wide 31-day tracker matrix */
+.tracker-scroll::-webkit-scrollbar {
+  height: 8px;
+  width: 8px;
+}
+
+.tracker-scroll::-webkit-scrollbar-track {
+  background: #f4f2ed;
+  border-radius: 4px;
+}
+
+.tracker-scroll::-webkit-scrollbar-thumb {
+  background: #d6d3cb;
+  border-radius: 4px;
+}
+
+.tracker-scroll::-webkit-scrollbar-thumb:hover {
+  background: #b8b4aa;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

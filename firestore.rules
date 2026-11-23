@@ -1,0 +1,267 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Pillar 0: Default-deny global catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Primitive Helpers ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function parentUserExists(userId) {
+      return exists(/databases/$(database)/documents/users/$(userId)) &&
+        get(/databases/$(database)/documents/users/$(userId)).data.uid == request.auth.uid;
+    }
+
+    // --- Entity Validation Blueprints (Synchronized with firebase-blueprint.json) ---
+    function isValidUserProfile(data) {
+      return data.keys().hasAll(['uid', 'displayName', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['uid', 'displayName', 'createdAt', 'updatedAt']) &&
+        isValidId(data.uid) &&
+        data.uid == request.auth.uid &&
+        data.displayName is string &&
+        data.displayName.size() >= 1 &&
+        data.displayName.size() <= 100 &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidIcon(icon) {
+      return icon is string && icon.size() >= 1 && icon.size() <= 40 && icon in [
+        'sparkles',
+        'droplet',
+        'footprints',
+        'book-open',
+        'apple',
+        'dumbbell',
+        'moon',
+        'notebook-pen',
+        'heart',
+        'smartphone-off',
+        'sun',
+        'coffee',
+        'brain',
+        'music',
+        'target',
+        'flame',
+        'bike',
+        'leaf'
+      ];
+    }
+
+    function isValidCategory(category) {
+      return category is string && category.size() >= 1 && category.size() <= 24 && category in [
+        'health',
+        'sport',
+        'mindfulness',
+        'growth',
+        'routine',
+        'other'
+      ];
+    }
+
+    function isValidHabit(data) {
+      return data.keys().hasAll([
+          'userId',
+          'name',
+          'icon',
+          'category',
+          'goalPerMonth',
+          'order',
+          'archived',
+          'createdAt',
+          'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'userId',
+          'name',
+          'icon',
+          'category',
+          'goalPerMonth',
+          'order',
+          'archived',
+          'createdAt',
+          'updatedAt'
+        ]) &&
+        isValidId(data.userId) &&
+        data.userId == request.auth.uid &&
+        data.name is string &&
+        data.name.size() >= 1 &&
+        data.name.size() <= 80 &&
+        isValidIcon(data.icon) &&
+        isValidCategory(data.category) &&
+        data.goalPerMonth is int &&
+        data.goalPerMonth >= 1 &&
+        data.goalPerMonth <= 31 &&
+        data.order is int &&
+        data.order >= 0 &&
+        data.order <= 1000 &&
+        data.archived is bool &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidHabitLog(data, logId) {
+      return data.keys().hasAll([
+          'userId',
+          'habitId',
+          'date',
+          'monthKey',
+          'completed',
+          'createdAt'
+        ]) &&
+        data.keys().hasOnly([
+          'userId',
+          'habitId',
+          'date',
+          'monthKey',
+          'completed',
+          'createdAt'
+        ]) &&
+        isValidId(data.userId) &&
+        data.userId == request.auth.uid &&
+        isValidId(data.habitId) &&
+        data.date is string &&
+        data.date.size() == 10 &&
+        data.date.matches('^\\d{4}-\\d{2}-\\d{2}$') &&
+        data.monthKey is string &&
+        data.monthKey.size() == 7 &&
+        data.monthKey.matches('^\\d{4}-\\d{2}$') &&
+        data.date.matches('^' + data.monthKey + '-\\d{2}$') &&
+        logId == data.habitId + '_' + data.date &&
+        data.completed is bool &&
+        data.completed == true &&
+        data.createdAt is timestamp;
+    }
+
+    // --- Collection Rules ---
+
+    // 1. User Profile (Owner-Only, Root Gate)
+    match /users/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && isOwner(userId);
+      allow list: if false;
+
+      allow create: if isVerified() &&
+        isValidId(userId) &&
+        isOwner(userId) &&
+        isValidUserProfile(incoming()) &&
+        incoming().uid == userId &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+
+      allow update: if isVerified() &&
+        isValidId(userId) &&
+        isValidUserProfile(incoming()) &&
+        isOwner(userId) &&
+        incoming().uid == existing().uid &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'updatedAt']);
+
+      allow delete: if false;
+
+      // 2. User Habits Subcollection
+      match /habits/{habitId} {
+        allow get: if isSignedIn() &&
+          isValidId(userId) &&
+          isValidId(habitId) &&
+          isOwner(userId) &&
+          parentUserExists(userId);
+
+        // Pillar 8: Secure list query without get()/exists()
+        allow list: if isSignedIn() &&
+          isOwner(userId) &&
+          existing().userId == request.auth.uid;
+
+        allow create: if isVerified() &&
+          isValidId(userId) &&
+          isValidId(habitId) &&
+          isValidHabit(incoming()) &&
+          isOwner(userId) &&
+          incoming().createdAt == request.time &&
+          incoming().updatedAt == request.time &&
+          parentUserExists(userId);
+
+        allow update: if isVerified() &&
+          isValidId(userId) &&
+          isValidId(habitId) &&
+          isValidHabit(incoming()) &&
+          isOwner(userId) &&
+          incoming().userId == existing().userId &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().updatedAt == request.time &&
+          parentUserExists(userId) && (
+            // Action: Edit habit details
+            incoming().diff(existing()).affectedKeys().hasOnly(['name', 'icon', 'category', 'goalPerMonth', 'updatedAt']) ||
+            // Action: Edit goal inline
+            incoming().diff(existing()).affectedKeys().hasOnly(['goalPerMonth', 'updatedAt']) ||
+            // Action: Reorder habit
+            incoming().diff(existing()).affectedKeys().hasOnly(['order', 'updatedAt']) ||
+            // Action: Archive or restore habit
+            incoming().diff(existing()).affectedKeys().hasOnly(['archived', 'updatedAt'])
+          );
+
+        allow delete: if isVerified() &&
+          isValidId(userId) &&
+          isValidId(habitId) &&
+          isOwner(userId) &&
+          parentUserExists(userId);
+      }
+
+      // 3. Daily Habit Completion Logs Subcollection
+      match /logs/{logId} {
+        allow get: if isSignedIn() &&
+          isValidId(userId) &&
+          isValidId(logId) &&
+          isOwner(userId) &&
+          parentUserExists(userId);
+
+        // Pillar 8: Secure list query without get()/exists()
+        allow list: if isSignedIn() &&
+          isOwner(userId) &&
+          existing().userId == request.auth.uid;
+
+        allow create: if isVerified() &&
+          isValidId(userId) &&
+          isValidId(logId) &&
+          isValidHabitLog(incoming(), logId) &&
+          isOwner(userId) &&
+          incoming().createdAt == request.time &&
+          parentUserExists(userId) &&
+          exists(/databases/$(database)/documents/users/$(userId)/habits/$(incoming().habitId));
+
+        allow update: if false;
+
+        allow delete: if isVerified() &&
+          isValidId(userId) &&
+          isValidId(logId) &&
+          isOwner(userId) &&
+          parentUserExists(userId);
+      }
+    }
+  }
+}

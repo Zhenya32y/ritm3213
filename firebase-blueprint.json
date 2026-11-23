@@ -1,0 +1,176 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Owner-only user profile document serving as the parent gate for habits and daily completion logs.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Firebase Authentication UID of the user",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Display name shown in the habit tracker workspace",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the profile was created"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of the last profile update"
+        }
+      },
+      "required": ["uid", "displayName", "createdAt", "updatedAt"]
+    },
+    "Habit": {
+      "title": "Habit",
+      "description": "A single trackable daily habit with icon, category, monthly goal, and display order.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Owner Firebase Auth UID",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "name": {
+          "type": "string",
+          "description": "Habit title in user language",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "icon": {
+          "type": "string",
+          "description": "Lucide icon identifier for the habit",
+          "enum": [
+            "sparkles",
+            "droplet",
+            "footprints",
+            "book-open",
+            "apple",
+            "dumbbell",
+            "moon",
+            "notebook-pen",
+            "heart",
+            "smartphone-off",
+            "sun",
+            "coffee",
+            "brain",
+            "music",
+            "target",
+            "flame",
+            "bike",
+            "leaf"
+          ]
+        },
+        "category": {
+          "type": "string",
+          "description": "Habit category for analytics grouping",
+          "enum": ["health", "sport", "mindfulness", "growth", "routine", "other"]
+        },
+        "goalPerMonth": {
+          "type": "integer",
+          "description": "Target number of completed days per month (1-31)"
+        },
+        "order": {
+          "type": "integer",
+          "description": "Sort order in the habit grid (0-1000)"
+        },
+        "archived": {
+          "type": "boolean",
+          "description": "Whether the habit is archived from the active tracker grid"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the habit was created"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of the last update"
+        }
+      },
+      "required": [
+        "userId",
+        "name",
+        "icon",
+        "category",
+        "goalPerMonth",
+        "order",
+        "archived",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "HabitLog": {
+      "title": "HabitLog",
+      "description": "Daily completion record linking a habit to a specific calendar date (YYYY-MM-DD).",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Owner Firebase Auth UID",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "habitId": {
+          "type": "string",
+          "description": "Referenced habit document ID",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "date": {
+          "type": "string",
+          "description": "Calendar date in YYYY-MM-DD format",
+          "minLength": 10,
+          "maxLength": 10,
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        },
+        "monthKey": {
+          "type": "string",
+          "description": "Month key in YYYY-MM format for fast month queries",
+          "minLength": 7,
+          "maxLength": 7,
+          "pattern": "^\\d{4}-\\d{2}$"
+        },
+        "completed": {
+          "type": "boolean",
+          "description": "Always true while document exists"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the completion was marked"
+        }
+      },
+      "required": ["userId", "habitId", "date", "monthKey", "completed", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Owner-only user profile document acting as the root parent gate for subcollections."
+    },
+    "/users/{userId}/habits/{habitId}": {
+      "schema": { "$ref": "#/entities/Habit" },
+      "description": "Collection of trackable daily habits owned by the user."
+    },
+    "/users/{userId}/logs/{logId}": {
+      "schema": { "$ref": "#/entities/HabitLog" },
+      "description": "Daily completion records keyed by {habitId}_{YYYY-MM-DD} owned by the user."
+    }
+  }
+}

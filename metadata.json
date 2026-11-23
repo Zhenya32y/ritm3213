@@ -1,0 +1,6 @@
+{
+  "name": "Ритм — Трекер привычек",
+  "description": "Интерактивный трекер привычек с календарной сеткой по неделям, ежедневными отметками, сериями и подробной визуальной аналитикой.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
